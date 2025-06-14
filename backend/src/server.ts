@@ -33,16 +33,27 @@ const upload = multer({ dest: uploadDir });
 
 // File upload endpoint
 app.post('/api/upload', upload.single('file'), async (req, res) => {
-  const relPath = req.file?.path;
-  if (!relPath) {
+  if (!req.file) {
     res.status(400).json({ error: 'File not received' });
     return;
   }
-  const absPath = path.resolve(relPath);
+
+  // Get the absolute path directly from multer
+  const absPath = path.resolve(req.file.path);
   const { socketId } = req.body as { socketId?: string };
 
   console.log(`📩 Received file at path: ${absPath}`);
   console.log(`🔌 Associated socketId: ${socketId}`);
+
+  // Verify file exists before queuing
+  if (!fs.existsSync(absPath)) {
+    console.error(`❌ File does not exist at: ${absPath}`);
+    res.status(500).json({ error: 'File upload failed - file not found' });
+    return;
+  }
+
+  // Add a small delay to ensure file is fully written
+  await new Promise(resolve => setTimeout(resolve, 100));
 
   try {
     const job = await storeQueue.add('processStores', { path: absPath, socketId });
