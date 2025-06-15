@@ -1,20 +1,27 @@
-// socket.ts
-import { Server } from 'socket.io';
+// src/socket.ts
+import http from "http";
+import { Server } from "socket.io";
+import { createAdapter } from "@socket.io/redis-adapter";
+import IORedis from "ioredis";
 
 let io: Server;
 
-export function initSocket(server: any) {
-  io = new Server(server, {
-    cors: { origin: "*" },
-    path: "/socket.io", // Important!
-  });
-
+export function initSocket(server: http.Server) {
+  io = new Server(server, { cors: { origin: "*" } });
+  const pub = new IORedis(process.env.REDIS_URL || "redis://localhost:6379");
+  const sub = pub.duplicate();
+  io.adapter(createAdapter(pub, sub));
   io.on("connection", (socket) => {
-    console.log("✅ Client connected:", socket.id);
-    socket.join(socket.id); // 🧠 We use socket.id as room name
+    console.log(`🔌 Socket connected: ${socket.id}`);
   });
-
-  return io;
 }
 
-export { io };
+export function getIO() {
+  if (!io) {
+    io = new Server({ cors: { origin: "*" } });
+    const pub = new IORedis(process.env.REDIS_URL || "redis://localhost:6379");
+    const sub = pub.duplicate();
+    io.adapter(createAdapter(pub, sub));
+  }
+  return io;
+}

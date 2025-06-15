@@ -6,13 +6,13 @@ export interface IStore extends Document {
   error?: string;
 }
 
-const storeSchema = new Schema<IStore>({
-  // adjust fields per CSV headers
-}, { strict: false });
+// Define your CSV fields here (this example is flexible with strict:false)
+const storeSchema = new Schema<IStore>({}, { strict: false });
 
+// Add status and error fields
 storeSchema.add({
-  status: { type: String, enum: ['pending','success','failed'], default: 'pending' },
-  error: String
+  status: { type: String, enum: ['pending', 'success', 'failed'], default: 'pending' },
+  error: { type: String, default: null }
 });
 
 export const Store = model<IStore>('Store', storeSchema);

@@ -3,9 +3,19 @@
 import { useState, useRef, useEffect } from "react";
 import { io, Socket } from "socket.io-client";
 
+type Summary = {
+  total: number;
+  success: number;
+  failed: number;
+  errors: { row: number; message: string }[];
+};
+
 export default function FileUploader() {
-  const [progress, setProgress] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [processProgress, setProcessProgress] = useState<number | null>(null);
+  const [logs, setLogs] = useState<string[]>([]);
   const [isConnected, setIsConnected] = useState(false);
+
   const fileInput = useRef<HTMLInputElement>(null);
   const socketRef = useRef<Socket | null>(null);
 
@@ -24,33 +34,40 @@ export default function FileUploader() {
 
     socket.on("connect", () => {
       setIsConnected(true);
-      console.log("✅ Socket connected with id", socket.id);
+      appendLog(`✅ Socket connected (${socket.id})`);
+    });
+
+    // catch worker log messages
+    socket.on("log", (msg: string) => {
+      appendLog(`🔧 ${msg}`);
     });
 
     socket.on("progress", (pct: number) => {
-      console.log("📊 Processing progress:", pct);
-      setProgress(pct);
+      setProcessProgress(pct);
+      appendLog(`📊 Processing: ${pct}%`);
     });
 
-    socket.on("complete", () => {
-      console.log("✅ Processing complete");
-      alert("Upload and processing complete!");
-      setProgress(100);
+    socket.on("summary", (summary: Summary) => {
+      appendLog(
+        `📑 Summary — total: ${summary.total}, success: ${summary.success}, failed: ${summary.failed}`
+      );
+      if (summary.errors.length) {
+        appendLog(
+          `⚠️ Errors:\n${summary.errors
+            .map((e) => `Row ${e.row}: ${e.message}`)
+            .join("\n")}`
+        );
+      }
+      setProcessProgress(100);
     });
 
     socket.on("disconnect", () => {
       setIsConnected(false);
-      console.log("🔌 Disconnected from server");
+      appendLog("🔌 Disconnected from server");
     });
 
-    socket.on("connect_error", (err) => {
-      console.error("❌ Socket connection error:", err.message);
-      setIsConnected(false);
-    });
-
-    // For debugging: log any incoming event
-    socket.onAny((event, ...args) => {
-      console.log("🔔 Received event:", event, args);
+    socket.on("error", (err: any) => {
+      appendLog(`❌ Socket error: ${err}`);
     });
 
     return () => {
@@ -58,46 +75,51 @@ export default function FileUploader() {
     };
   }, []);
 
+  const appendLog = (msg: string) => {
+    setLogs((logs) => [...logs, `${new Date().toLocaleTimeString()}: ${msg}`]);
+  };
+
   const upload = () => {
     const file = fileInput.current?.files?.[0];
     const socket = socketRef.current;
+    if (!file) return alert("Please select a file first.");
+    if (!socket || !isConnected) return alert("Socket not connected.");
 
-    if (!file) {
-      alert("Please select a file before uploading.");
-      return;
-    }
-    if (!socket || !isConnected) {
-      alert("Socket not connected. Please wait.");
-      return;
-    }
+    // reset
+    setUploadProgress(0);
+    setProcessProgress(null);
+    setLogs([]);
+
+    const sid = socket.id;
+    if (!sid) return alert("Socket still connecting, please wait.");
 
     const fd = new FormData();
     fd.append("file", file);
-    fd.append("socketId", socket.id ?? "");
+    fd.append("socketId", sid);
 
+    appendLog("📁 Starting upload…");
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/upload`);
 
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        const percent = Math.round((event.loaded / event.total) * 100);
-        console.log("📤 Uploading progress:", percent);
-        setProgress(percent);
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        setUploadProgress(pct);
+        appendLog(`📤 Upload: ${pct}%`);
       }
     };
 
     xhr.onload = () => {
-      if (xhr.status !== 200) {
-        console.error("Upload failed:", xhr.statusText);
-        alert("Upload failed on server");
+      if (xhr.status === 200) {
+        appendLog("✔️ Upload complete, awaiting processing…");
       } else {
-        console.log("✔️ Upload complete, waiting for processing...");
-        setProgress(0);
+        appendLog(`❌ Upload failed: ${xhr.statusText}`);
+        alert("Upload failed on server");
       }
     };
 
     xhr.onerror = () => {
-      console.error("Network error during upload");
+      appendLog("❌ Network error during upload");
       alert("Network error during upload");
     };
 
@@ -105,31 +127,59 @@ export default function FileUploader() {
   };
 
   return (
-    <div className="max-w-md mx-auto mt-10">
+    <div className="max-w-md mx-auto mt-10 space-y-4">
       <input
         type="file"
         ref={fileInput}
         accept=".csv,.xlsx"
         className="block w-full text-sm text-gray-700"
       />
+
       <button
         onClick={upload}
         disabled={!isConnected}
-        className={`mt-4 w-full py-2 text-white font-semibold rounded transition 
-          ${isConnected ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400 cursor-not-allowed'}`}
-      >
-        {isConnected ? 'Upload' : 'Connecting...'}
+        className={`w-full py-2 font-semibold text-white rounded ${
+          isConnected
+            ? "bg-blue-600 hover:bg-blue-700"
+            : "bg-gray-400 cursor-not-allowed"
+        }`}>
+        {isConnected ? "Upload" : "Connecting…"}
       </button>
 
-      <div className="w-full bg-gray-200 h-4 rounded mt-4">
-        <div
-          className="h-4 bg-green-500 rounded transition-width duration-200"
-          style={{ width: `${progress}%` }}
-        />
+      {/* Upload Progress */}
+      <div>
+        <p className="text-sm text-gray-600">Upload Progress</p>
+        <div className="w-full h-4 bg-gray-200 rounded">
+          <div
+            className="h-4 bg-green-500 rounded transition-width duration-200"
+            style={{ width: `${uploadProgress}%` }}
+          />
+        </div>
+        <p className="text-right text-sm text-gray-600">{uploadProgress}%</p>
       </div>
-      <p className="mt-1 text-right text-sm text-gray-600">
-        {progress}%
-      </p>
+
+      {/* Processing Progress */}
+      {processProgress !== null && (
+        <div>
+          <p className="text-sm text-gray-600">Processing Progress</p>
+          <div className="w-full h-4 bg-gray-200 rounded">
+            <div
+              className="h-4 bg-blue-500 rounded transition-width duration-200"
+              style={{ width: `${processProgress}%` }}
+            />
+          </div>
+          <p className="text-right text-sm text-gray-600">{processProgress}%</p>
+        </div>
+      )}
+
+      {/* Logs */}
+      <div className="h-40 overflow-y-auto bg-gray-50 p-2 rounded border">
+        {logs.map((line, i) => (
+          <div key={i} className="text-xs font-mono text-gray-700">
+            {line}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
