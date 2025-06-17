@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",
+    "@socket.io/redis-emitter": "^5.1.0",
     "bullmq": "^1.91.1",
     "csv-parser": "^3.0.0",
     "dotenv": "^16.1.4",
@@ -32,12 +33,12 @@
     "tsx": "^4.20.3",
     "typescript": "5.1.3"
   },
-    "_moduleAliases": {
-      "@models": "src/models",
-      "@controllers": "src/controllers",
-      "@routes": "src/routes",
-      "@utils": "src/utils",
-      "@middlewares": "src/middlewares",
-      "@shared": "src/shared"
-    }
+  "_moduleAliases": {
+    "@models": "src/models",
+    "@controllers": "src/controllers",
+    "@routes": "src/routes",
+    "@utils": "src/utils",
+    "@middlewares": "src/middlewares",
+    "@shared": "src/shared"
+  }
 }

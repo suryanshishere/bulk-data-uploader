@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect, useRef, ChangeEvent } from "react";
 import { io, Socket } from "socket.io-client";
 import FileDropZone from "./FileDropZone";
@@ -13,261 +15,281 @@ type Summary = {
   errors: { row: number; message: string }[];
 };
 
+type HistoryEntry = {
+  _id: string;
+  status: string;
+  total: number;
+  processed: number;
+  success: number;
+  failed: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type State = {
+  email: string;
+  emailSubmitted: boolean;
+  history: HistoryEntry[];
+  currentProcessId: string | null;
   uploadProgress: number;
   processProgress: number | null;
   logs: string[];
   isConnected: boolean;
   isUploading: boolean;
-  dragActive: boolean;
   selectedFile: File | null;
-  email: string;
 };
 
 const initialState: State = {
+  email: "",
+  emailSubmitted: false,
+  history: [],
+  currentProcessId: null,
   uploadProgress: 0,
   processProgress: null,
   logs: [],
   isConnected: false,
   isUploading: false,
-  dragActive: false,
   selectedFile: null,
-  email: "",
 };
 
-// Email validation function
-const isValidEmail = (email: string): boolean => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email.trim());
-};
-
-// File validation function
-const isValidFile = (file: File | null): boolean => {
-  if (!file) return false;
-  if (file.size === 0) return false;
-  const validExtensions = /\.(csv|xlsx)$/i;
-  return validExtensions.test(file.name);
-};
+const isValidEmail = (email: string) =>
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+const isValidFile = (f: File | null) =>
+  Boolean(f && f.size > 0 && /\.(csv|xlsx)$/i.test(f.name));
 
 export default function FileUploader() {
-  const [state, setState] = useState<State>(initialState);
+  const [state, setState] = useState(initialState);
   const socketRef = useRef<Socket | null>(null);
 
-  const handleLog = (message: string, updates: Partial<State> = {}) => {
+  const addLog = (msg: string, extra: Partial<State> = {}) => {
     const timestamp = new Date().toLocaleTimeString();
-    const logEntry = `${timestamp}: ${message}`;
-    setState((prev) => ({
-      ...prev,
-      logs: [...prev.logs, logEntry],
-      ...updates,
-    }));
-  };
-
-  const handleSummary = (summary: Summary) => {
-    handleLog(
-      `📑 Summary — total: ${summary.total}, success: ${summary.success}, failed: ${summary.failed}`
-    );
-    if (summary.errors.length > 0) {
-      const errorMessages = summary.errors
-        .map((e) => `Row ${e.row}: ${e.message}`)
-        .join("; ");
-      handleLog(`⚠️ Errors: ${errorMessages}`);
-    }
-    setState((prev) => ({ ...prev, processProgress: 100 }));
-  };
-
-  const resetState = () => {
-    setState((prev) => ({
-      ...prev,
-      logs: [],
-      uploadProgress: 0,
-      processProgress: null,
+    setState((s) => ({
+      ...s,
+      logs: [...s.logs, `${timestamp}: ${msg}`],
+      ...extra,
     }));
   };
 
   useEffect(() => {
-    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL!;
-    const socket = io(BACKEND_URL, {
+    if (!state.emailSubmitted) return;
+
+    const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL!;
+    const socket = io(BACKEND, {
+      query: { email: state.email },
       transports: ["websocket", "polling"],
       path: "/socket.io",
     });
     socketRef.current = socket;
 
     socket.on("connect", () =>
-      handleLog(`✅ Socket connected (${socket.id})`, { isConnected: true })
+      addLog(`✅ Socket connected (${socket.id})`, { isConnected: true })
     );
-    socket.on("log", (msg: string) => handleLog(`🔧 ${msg}`));
-    socket.on("progress", (pct: number) =>
-      handleLog(`📊 Processing: ${pct}%`, { processProgress: pct })
+    socket.on("history", (hist: HistoryEntry[]) => {
+      setState((s) => {
+        const curr = hist.find((h) => h.status === "processing")?._id || null;
+        return {
+          ...s,
+          history: hist,
+          currentProcessId: curr,
+          processProgress: curr !== s.currentProcessId ? 0 : s.processProgress,
+        };
+      });
+      addLog(`📜 Loaded full history (${state.history.length + 1})`);
+    });
+    socket.on("fileProcessId", (pid: string) =>
+      setState((s) => ({ ...s, currentProcessId: pid }))
     );
-    socket.on("summary", handleSummary);
+    socket.on(
+      "progress",
+      ({ processId, percent }: { processId: string; percent: number }) => {
+        setState((s) => {
+          if (s.currentProcessId !== processId) return s;
+          return {
+            ...s,
+            logs: [
+              ...s.logs,
+              `${new Date().toLocaleTimeString()}: 📊 Processing: ${percent}%`,
+            ],
+            processProgress: percent,
+          };
+        });
+      }
+    );
+    socket.on("summary", (sum: Summary & { processId: string }) => {
+      addLog(
+        `📑 Summary: ${sum.success}/${sum.total} succeeded, ${sum.failed} failed`
+      );
+      setState((s) => ({
+        ...s,
+        processProgress: 100,
+        isUploading: false,
+        currentProcessId: null,
+      }));
+    });
+    socket.on("log", (m: string) => addLog(`🔧 ${m}`));
     socket.on("disconnect", () =>
-      handleLog("🔌 Disconnected from server", { isConnected: false })
+      addLog("🔌 Socket disconnected", { isConnected: false })
     );
-    socket.on("error", (err: any) => handleLog(`❌ Socket error: ${err}`));
+    socket.on("error", (e: any) => addLog(`❌ Socket error: ${e}`));
 
     return () => {
       socket.disconnect();
+      socketRef.current = null;
     };
-  }, []);
+  }, [state.emailSubmitted]);
+
+  const submitEmail = () => {
+    if (!isValidEmail(state.email)) {
+      addLog("❌ Please enter a valid email");
+      return;
+    }
+    setState((s) => ({ ...s, emailSubmitted: true, logs: [] }));
+  };
 
   const uploadFile = () => {
-    const { selectedFile, isConnected, email } = state;
-
-    if (!isValidEmail(email)) {
-      return handleLog("❌ Please enter a valid email address.");
+    if (!socketRef.current || !state.isConnected) {
+      return addLog("❌ Not connected");
     }
-
-    if (!isValidFile(selectedFile)) {
-      if (!selectedFile) {
-        return handleLog("❌ No file selected. Please choose a file to upload.");
-      }
-      if (selectedFile.size === 0) {
-        return handleLog("❌ Selected file is empty.");
-      }
-      return handleLog("❌ Invalid file type. Only .csv or .xlsx files are allowed.");
+    if (!isValidFile(state.selectedFile)) {
+      return addLog("❌ Select a non‑empty .csv or .xlsx");
     }
+    setState((s) => ({
+      ...s,
+      isUploading: true,
+      uploadProgress: 0,
+      processProgress: 0,
+      logs: [],
+    }));
 
-    if (!socketRef.current || !isConnected) {
-      return handleLog("❌ Not connected to server.");
-    }
-
-    // At this point, we know selectedFile is not null due to isValidFile check
-    const validatedFile = selectedFile!;
-
-    resetState();
-    setState((prev) => ({ ...prev, isUploading: true }));
-
-    const formData = new FormData();
-    formData.append("file", validatedFile);
-    formData.append("socketId", socketRef.current.id ?? "");
-    formData.append("email", email);
-
-    handleLog("📁 Starting upload…");
+    const form = new FormData();
+    form.append("file", state.selectedFile!);
+    form.append("socketId", socketRef.current.id ?? "");
+    form.append("email", state.email);
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/upload`);
-
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        const pct = Math.round((event.loaded / event.total) * 100);
-        handleLog(`📤 Upload: ${pct}%`, { uploadProgress: pct });
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const p = Math.round((e.loaded / e.total) * 100);
+        addLog(`📤 Upload: ${p}%`, { uploadProgress: p });
       }
     };
-
     xhr.onload = () => {
       if (xhr.status === 200) {
-        handleLog("✔️ Upload complete, awaiting processing…", {
-          uploadProgress: 100,
-          processProgress: 0,
-        });
+        addLog("✔️ Upload complete, waiting for processing…");
       } else {
-        handleLog(`❌ Upload failed: ${xhr.status} ${xhr.statusText}`, {
-          isUploading: false,
-        });
+        addLog(`❌ Upload failed (${xhr.status})`, { isUploading: false });
       }
     };
-
     xhr.onerror = () =>
-      handleLog("❌ Network error during upload", { isUploading: false });
-
-    xhr.send(formData);
+      addLog("❌ Network error during upload", { isUploading: false });
+    xhr.send(form);
   };
 
-  useEffect(() => {
-    if (state.processProgress === 100) {
-      const timeout = setTimeout(() => {
-        setState((prev) => ({
-          ...prev,
-          isUploading: false,
-          selectedFile: null,
-        }));
-        handleLog("🔄 Ready for next upload.");
-      }, 1500);
-      return () => clearTimeout(timeout);
-    }
-  }, [state.processProgress]);
+  const isProcessing =
+    !!state.currentProcessId &&
+    !!state.history.find((h) => h._id === state.currentProcessId);
 
-  // Enhanced validation for upload button
-  const isUploadReady = 
-    state.isConnected && 
-    !state.isUploading && 
-    isValidEmail(state.email) && 
+  const canUpload =
+    state.isConnected &&
+    state.emailSubmitted &&
+    !state.isUploading &&
+    isValidEmail(state.email) &&
     isValidFile(state.selectedFile);
 
-  const statusText = !state.isConnected
-    ? "Connecting…"
-    : state.isUploading
+  const uploadLabel = state.isUploading
     ? state.uploadProgress < 100
       ? `Uploading ${state.uploadProgress}%`
       : "Uploaded"
-    : isUploadReady
-    ? "Ready to upload"
-    : "Upload";
-
-  const handleEmailChange = (e: ChangeEvent<HTMLInputElement>) => {
-    setState((prev) => ({ ...prev, email: e.target.value }));
-  };
-
-  // Enhanced error checking for email input
-  const emailError = state.email.length > 0 && !isValidEmail(state.email);
-  const showEmailValidationError = 
-    state.logs.some((l) => l.includes("Please enter a valid email"));
+    : isProcessing
+    ? "Upload Another File"
+    : "Upload File";
 
   return (
-    <div className="w-88 mt-10 flex flex-col gap-8">
-      <FileDropZone
-        onFileSelect={(file) =>
-          setState((prev) => ({ ...prev, selectedFile: file }))
-        }
-        disabled={!state.isConnected || state.isUploading}
-        selectedFile={state.selectedFile}
-        dragActive={state.dragActive}
-        setDragActive={(active) =>
-          setState((prev) => ({ ...prev, dragActive: active }))
-        }
-      />
+    <div className="w-88 mt-10 flex flex-col gap-6">
+      {!state.emailSubmitted ? (
+        <>
+          <Input
+            name="email"
+            label="Enter your email to continue"
+            type="email"
+            required
+            placeholder="you@example.com"
+            value={state.email}
+            onChange={(e: ChangeEvent<HTMLInputElement>) =>
+              setState((s) => ({ ...s, email: e.target.value }))
+            }
+            error={state.email.length > 0 && !isValidEmail(state.email)}
+            helperText="We'll use this to fetch your upload history"
+          />
+          <button
+            onClick={submitEmail}
+            disabled={!isValidEmail(state.email)}
+            className={`w-full h-10 font-semibold rounded ${
+              !isValidEmail(state.email)
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-green-600 hover:bg-green-700"
+            } text-white`}
+          >
+            Submit Email
+          </button>
+        </>
+      ) : (
+        <>
+          <FileDropZone
+            onFileSelect={(file) =>
+              setState((s) => ({ ...s, selectedFile: file }))
+            }
+            disabled={!state.isConnected || state.isUploading}
+            selectedFile={state.selectedFile}
+            dragActive={false}
+            setDragActive={() => {}}
+          />
 
-      <Input
-        name="email"
-        label="Email"
-        type="email"
-        required
-        placeholder="you@example.com"
-        value={state.email}
-        onChange={handleEmailChange}
-        error={emailError || showEmailValidationError}
-        helperText={
-          emailError 
-            ? "Please enter a valid email address" 
-            : isValidEmail(state.email) 
-            ? "Valid email address" 
-            : "Please enter a valid email address"
-        }
-      />
+          <UploadButton
+            onClick={uploadFile}
+            disabled={!canUpload}
+            progress={state.uploadProgress}
+            statusText={uploadLabel}
+          />
 
-      <UploadButton
-        onClick={uploadFile}
-        disabled={!isUploadReady}
-        progress={state.uploadProgress}
-        statusText={statusText}
-      />
+          {!state.isUploading && isProcessing && (
+            <ProgressBar label="Processing" progress={state.processProgress!} />
+          )}
 
-      {state.isUploading && state.uploadProgress < 100 && (
-        <ProgressBar label="Upload Progress" progress={state.uploadProgress} />
+          {!state.isUploading && isProcessing && (
+            <div className="font-mono mt-4">
+              <h4>Logs</h4>
+              <Logs lines={state.logs} />
+            </div>
+          )}
+
+          <div className="flex flex-col gap-1">
+            <h4 className="text-lg font-semibold">Previous uploads</h4>
+            <ul className="space-y-2 mb-4">
+              {state.history.length > 0 ? (
+                state.history.map((h) => (
+                  <li key={h._id} className="flex justify-between">
+                    <span>
+                      {new Date(h.createdAt).toLocaleString()} •{" "}
+                      <span className="font-mono text-sm text-gray-500">
+                        ID: {h._id}
+                      </span>
+                    </span>
+                    <span>
+                      {h._id === state.currentProcessId
+                        ? "processing"
+                        : h.status}
+                    </span>
+                  </li>
+                ))
+              ) : (
+                <li>No upload history yet.</li>
+              )}
+            </ul>
+          </div>
+        </>
       )}
-
-      {state.processProgress !== null && (
-        <ProgressBar
-          label="Processing Progress"
-          progress={state.processProgress}
-        />
-      )}
-
-      <div className="font-mono">
-        <h3>Real time log</h3>
-        <Logs lines={state.logs} />
-      </div>
     </div>
   );
 }

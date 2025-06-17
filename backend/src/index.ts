@@ -18,9 +18,13 @@ const app = express();
 const server = http.createServer(app);
 initSocket(server);
 connectDB();
+
 app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 const upload = multer({ dest: uploadDir });
+
 app.post('/api/upload', upload.single('file'), async (req, res) => {
   if (!req.file) {
     res.status(400).json({ error: 'File not received' });
@@ -37,7 +41,6 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     res.status(500).json({ error: 'File not found' });
     return;
   }
-  await new Promise((r) => setTimeout(r, 100));
 
   try {
     const job = await storeQueue.add('processStores', { path: absPath, socketId, userEmail: email });

@@ -1,205 +1,241 @@
+// worker.ts
 import { Worker, Job } from "bullmq";
 import fs from "fs";
 import csv from "csv-parser";
 import "dotenv/config";
-
 import IORedis from "ioredis";
-import { getIO } from "./socket";
-import { connectDB } from "./db";
-import { Store, IStore } from "./models/Store";
+import { Emitter } from "@socket.io/redis-emitter";
 import nodemailer from "nodemailer";
 
+import { connectDB } from "./db";
+import { Store, IStore } from "./models/Store";
+import { FileProcess, IFileProcess } from "./models/FileProcess";
+
 const BATCH_SIZE = 1000;
-connectDB();
 
-const connection = new IORedis(
-  process.env.REDIS_URL || "redis://localhost:6379"
-);
-const io = getIO();
+(async () => {
+  await connectDB();
+  console.log("▶️  MongoDB ready, starting worker…");
 
-const transporter = nodemailer.createTransport({
-  host: process.env.MAIL_HOST,
-  port: Number(process.env.MAIL_PORT),
-  auth: { user: process.env.MAIL_USER, pass: process.env.MAIL_PASS },
-});
+  const connection = new IORedis(process.env.REDIS_URL!);
+  const emitter = new Emitter(connection);
 
-new Worker(
-  "storeQueue",
-  async (job: Job) => {
-    const {
-      path,
-      socketId = "",
-      userEmail,
-    } = job.data as { path: string; socketId?: string; userEmail?: string };
-    io.to(socketId).emit("log", `👷 Job ${job.id} start`);
+  const transporter = nodemailer.createTransport({
+    host: process.env.MAIL_HOST,
+    port: Number(process.env.MAIL_PORT),
+    auth: {
+      user: process.env.MAIL_USER,
+      pass: process.env.MAIL_PASS,
+    },
+  });
 
-    if (!fs.existsSync(path)) {
-      io.to(socketId).emit("error", "File not found");
-      throw new Error(`Missing file: ${path}`);
-    }
+  new Worker<{ path: string; socketId?: string; userEmail?: string }>(
+    "storeQueue",
+    async (
+      job: Job<{ path: string; socketId?: string; userEmail?: string }>
+    ) => {
+      const { path, socketId = "", userEmail } = job.data;
 
-    io.to(socketId).emit("log", "🔢 Counting rows...");
-    const total = await new Promise<number>((res, rej) => {
-      let count = 0;
-      fs.createReadStream(path)
-        .pipe(csv())
-        .on("data", () => count++)
-        .on("end", () => res(count))
-        .on("error", rej);
-    });
-    io.to(socketId).emit("log", `📊 Total rows: ${total}`);
+      let tracker: IFileProcess;
+      try {
+        tracker = await FileProcess.create({
+          userEmail,
+          socketId,
+          filePath: path,
+          status: "processing",
+        });
+      } catch (err) {
+        console.error("❌ Failed to create FileProcess record:", err);
+        throw err;
+      }
 
-    let processed = 0;
-    let allErrors: { row: number; message: string }[] = [];
+      const room = userEmail || socketId;
+      emitter.to(room).emit("fileProcessId", tracker._id.toString());
+      emitter
+        .to(room)
+        .emit("log", `👷 Job ${job.id} start | PID: ${tracker._id}`);
 
-    await new Promise<void>((resolve, reject) => {
-      let buffer: Array<Partial<IStore>> = [];
-      let rowNum = 0;
-      const stream = fs.createReadStream(path).pipe(csv());
+      const emitHistory = async () => {
+        if (!userEmail) return;
 
-      stream.on("data", (row) => {
-        rowNum++;
-        buffer.push({ ...row, status: "pending" });
+        const history = await FileProcess.find({ userEmail })
+          .sort({ createdAt: -1 }) // sort by time (latest first)
+          .select(
+            "_id status total processed success failed createdAt updatedAt"
+          )
+          .lean();
 
-        if (buffer.length >= BATCH_SIZE) {
-          stream.pause();
-          io.to(socketId).emit("log", `🔄 Batch @ row ${rowNum}`);
-          processBatch(buffer, rowNum - buffer.length + 1)
-            .then((stats) => {
-              processed += stats.inserted + stats.failed;
-              allErrors.push(...stats.errors);
-              if (stats.failed === 0) {
-                io.to(socketId).emit(
-                  "log",
-                  `✅ All ${stats.inserted} records inserted successfully`
-                );
-              } else {
-                io.to(socketId).emit(
-                  "log",
-                  `✅ ${stats.inserted} ok, ${stats.failed} fail`
-                );
-              }
+        const currentProcessing = history.find(
+          (h) => h.status === "processing"
+        );
 
-              emitProgress();
-              buffer = [];
-              stream.resume();
-            })
-            .catch((err) => {
-              io.to(socketId).emit("error", "Batch error");
-              reject(err);
-            });
+        emitter.to(room).emit("history", {
+          list: history,
+          currentProcessingId: currentProcessing?._id.toString() || null,
+        });
+      };
+
+      await emitHistory();
+
+      const updateTracker = async (
+        fields: Partial<Omit<IFileProcess, "processingErrors">> & {
+          processingErrors?: IFileProcess["processingErrors"];
         }
+      ) => {
+        await FileProcess.findByIdAndUpdate(tracker._id, fields);
+        await emitHistory();
+      };
+
+      if (!fs.existsSync(path)) {
+        emitter.to(room).emit("error", "File not found");
+        await updateTracker({ status: "failed" });
+        throw new Error(`Missing file: ${path}`);
+      }
+
+      emitter.to(room).emit("log", "🔢 Counting rows...");
+      const total = await new Promise<number>((res, rej) => {
+        let cnt = 0;
+        fs.createReadStream(path)
+          .pipe(csv())
+          .on("data", () => cnt++)
+          .on("end", () => res(cnt))
+          .on("error", rej);
       });
 
-      stream.on("end", async () => {
-        if (buffer.length) {
-          io.to(socketId).emit("log", `🔄 Final ${buffer.length}`);
-          const stats = await processBatch(buffer, rowNum - buffer.length + 1);
+      emitter.to(room).emit("log", `📊 Total: ${total}`);
+      await updateTracker({ total });
+
+      let processed = 0;
+      let allErrors: { row: number; message: string }[] = [];
+
+      await new Promise<void>((resolve, reject) => {
+        let buffer: Array<Partial<IStore>> = [];
+        let rowNum = 0;
+        const stream = fs.createReadStream(path).pipe(csv());
+
+        const reportProgress = async (final = false) => {
+          const pct = final ? 100 : Math.round((processed / total) * 100);
+          emitter.to(room).emit("progress", {
+            processId: tracker._id.toString(),
+            percent: pct,
+          });
+          await updateTracker({
+            processed,
+            success: processed - allErrors.length,
+            failed: allErrors.length,
+          });
+        };
+
+        const flushBatch = async (
+          batch: Array<Partial<IStore>>,
+          start: number
+        ) => {
+          emitter.to(room).emit("log", `🔄 Batch @ row ${start}`);
+          const stats = await processBatch(batch, start);
           processed += stats.inserted + stats.failed;
           allErrors.push(...stats.errors);
-          if (stats.failed === 0) {
-            io.to(socketId).emit(
-              "log",
-              `✅ All ${stats.inserted} records inserted successfully`
-            );
-          } else {
-            io.to(socketId).emit(
-              "log",
-              `✅ ${stats.inserted} ok, ${stats.failed} fail`
-            );
-          }
-        }
-        io.to(socketId).emit("log", "🎉 Done");
-        emitProgress(100);
-        emitSummary();
-        cleanup();
-        resolve();
-      });
-
-      stream.on("error", (err) => {
-        io.to(socketId).emit("error", "Read error");
-        reject(err);
-      });
-
-      function emitProgress(fixed?: number) {
-        const pct = fixed ?? Math.round((processed / total) * 100);
-        io.to(socketId).emit("progress", pct);
-      }
-      function emitSummary() {
-        const summary = {
-          total,
-          success: total - allErrors.length,
-          failed: allErrors.length,
-          errors: allErrors,
+          const msg =
+            stats.failed === 0
+              ? `✅ ${stats.inserted} inserted`
+              : `✅ ${stats.inserted} ok, ${stats.failed} failed`;
+          emitter.to(room).emit("log", msg);
+          await reportProgress(false);
         };
-        io.to(socketId).emit("summary", summary);
-        if (userEmail) sendEmailSummary(userEmail, summary);
-      }
-      function cleanup() {
-        try {
-          fs.unlinkSync(path);
-        } catch {}
-      }
-    });
 
-    async function processBatch(
-      batch: Array<Partial<IStore>>,
-      startRow: number
-    ) {
-      const results = await Promise.all(
-        batch.map(async (doc, idx) => {
-          try {
-            const created = await Store.create(doc);
-            await Store.findByIdAndUpdate(created._id, { status: "success" });
-            return { inserted: 1, failed: 0, errors: [] };
-          } catch (err: any) {
-            await Store.create({
-              ...doc,
-              status: "failed",
-              error: err.message,
+        const summarize = async () => {
+          const summary = {
+            total,
+            success: total - allErrors.length,
+            failed: allErrors.length,
+            errors: allErrors,
+          };
+          emitter
+            .to(room)
+            .emit("summary", { ...summary, processId: tracker._id });
+          if (userEmail)
+            await sendEmailSummary(userEmail, summary, tracker._id.toString());
+          await updateTracker({
+            processed: total,
+            success: summary.success,
+            failed: summary.failed,
+            processingErrors: summary.errors,
+            status: "completed",
+          });
+        };
+
+        stream
+          .on("data", (row) => {
+            rowNum++;
+            buffer.push({
+              ...row,
+              status: "pending",
+              fileProcess: tracker._id,
             });
-            return {
-              inserted: 0,
-              failed: 1,
-              errors: [{ row: startRow + idx, message: err.message }],
-            };
-          }
-        })
-      );
-
-      const inserted = results.reduce((sum, r) => sum + r.inserted, 0);
-      const failed = results.reduce((sum, r) => sum + r.failed, 0);
-      const errors = results.flatMap((r) => r.errors);
-      return { inserted, failed, errors };
-    }
-
-    async function sendEmailSummary(to: string, summary: any) {
-      interface ErrorDetail {
-        row: number;
-        message: string;
-      }
-
-      interface Summary {
-        total: number;
-        success: number;
-        failed: number;
-        errors: ErrorDetail[];
-      }
-
-      const html = `<h3>Upload Summary</h3><p>Total: ${
-        (summary as Summary).total
-      }</p><p>Success: ${(summary as Summary).success}</p><p>Failed: ${
-        (summary as Summary).failed
-      }</p><ul>${(summary as Summary).errors
-        .map((e: ErrorDetail) => `<li>Row ${e.row}: ${e.message}</li>`)
-        .join("")}</ul>`;
-      await transporter.sendMail({
-        from: process.env.MAIL_FROM,
-        to,
-        subject: "Upload Complete",
-        html,
+            if (buffer.length >= BATCH_SIZE) {
+              stream.pause();
+              flushBatch(buffer.splice(0), rowNum - buffer.length + 1)
+                .then(() => stream.resume())
+                .catch(reject);
+            }
+          })
+          .on("end", async () => {
+            if (buffer.length) {
+              await flushBatch(buffer.splice(0), rowNum - buffer.length + 1);
+            }
+            emitter.to(room).emit("log", "🎉 Done");
+            await reportProgress(true);
+            await summarize();
+            fs.unlinkSync(path);
+            resolve();
+          })
+          .on("error", reject);
       });
-    }
-  },
-  { connection }
-);
+
+      async function processBatch(
+        batch: Array<Partial<IStore>>,
+        startRow: number
+      ) {
+        const results = await Promise.all(
+          batch.map(async (doc, idx) => {
+            try {
+              const rec = await Store.create(doc);
+              await Store.findByIdAndUpdate(rec._id, { status: "success" });
+              return { inserted: 1, failed: 0, errors: [] };
+            } catch (e: any) {
+              await Store.create({
+                ...doc,
+                status: "failed",
+                error: e.message,
+              });
+              return {
+                inserted: 0,
+                failed: 1,
+                errors: [{ row: startRow + idx, message: e.message }],
+              };
+            }
+          })
+        );
+        const inserted = results.reduce((s, r) => s + r.inserted, 0);
+        const failed = results.reduce((s, r) => s + r.failed, 0);
+        const errors = results.flatMap((r) => r.errors);
+        return { inserted, failed, errors };
+      }
+
+      async function sendEmailSummary(to: string, summary: any, pid: string) {
+        const html =
+          `<h3>Upload Summary</h3><p>PID: ${pid}</p>` +
+          `<p>Total: ${summary.total}</p><p>Success: ${summary.success}</p><p>Failed: ${summary.failed}</p>` +
+          `<ul>${summary.errors
+            .map((e: any) => `<li>Row ${e.row}: ${e.message}</li>`)
+            .join("")}</ul>`;
+        await transporter.sendMail({
+          from: process.env.MAIL_FROM,
+          to,
+          subject: "Upload Complete",
+          html,
+        });
+      }
+    },
+    { connection }
+  );
+})();
