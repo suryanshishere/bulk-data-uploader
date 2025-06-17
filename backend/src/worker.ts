@@ -29,7 +29,7 @@ const BATCH_SIZE = 1000;
     },
   });
 
-  new Worker<{ path: string; socketId?: string; userEmail?: string }>(
+  new Worker<{ path: string; userEmail: string }>(
     "storeQueue",
     async (
       job: Job<{ path: string; socketId?: string; userEmail?: string }>
@@ -223,7 +223,9 @@ const BATCH_SIZE = 1000;
 
       async function sendEmailSummary(to: string, summary: any, pid: string) {
         const html =
-          `<h3>Upload Summary</h3><p>PID: ${pid}</p>` +
+          `<h3>Processed file link and upload summary</h3>` +
+          `<p><a href="${process.env.FRONTEND_URL}/file/${pid}" target="_blank" rel="noopener noreferrer">View processed file</a></p>` +
+          `<p>PID: ${pid}</p>` +
           `<p>Total: ${summary.total}</p><p>Success: ${summary.success}</p><p>Failed: ${summary.failed}</p>` +
           `<ul>${summary.errors
             .map((e: any) => `<li>Row ${e.row}: ${e.message}</li>`)
@@ -231,7 +233,7 @@ const BATCH_SIZE = 1000;
         await transporter.sendMail({
           from: process.env.MAIL_FROM,
           to,
-          subject: "Upload Complete",
+          subject: "Bulk Data File Processing Completed",
           html,
         });
       }
