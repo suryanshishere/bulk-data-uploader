@@ -37,7 +37,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
       className,
       outerClassProp,
       errorClassProp,
-      autoComplete,
+      autoComplete,disabled,
       ...rest
     },
     ref
@@ -71,7 +71,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     })();
 
     return (
-      <div className={`relative w-full flex items-center group ${outerClassProp ?? ""}`} role="group">
+      <div className={`relative w-full flex items-center group ${outerClassProp ?? ""} ${disabled ? "cursor-not-allowed":""}`} role="group">
         {/* Black shadow offset */}
         <span
           aria-hidden="true"
@@ -119,7 +119,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           className={`relative w-full bg-transparent pl-2 py-2 outline-none text-base rounded
             text-black
             ${error ? "text-red-700" : ""}
-            ${className}`}
+            ${className} ${disabled ? "cursor-not-allowed":""}`}
           style={style}
           {...rest}
         />

@@ -8,7 +8,13 @@ type FileDropZoneProps = {
   setDragActive: (active: boolean) => void;
 };
 
-export default function FileDropZone({ onFileSelect, disabled, selectedFile, dragActive, setDragActive }: FileDropZoneProps) {
+export default function FileDropZone({
+  onFileSelect,
+  disabled,
+  selectedFile,
+  dragActive,
+  setDragActive,
+}: FileDropZoneProps) {
   const fileInput = React.useRef<HTMLInputElement>(null);
 
   const handleFiles = (files: FileList) => {
@@ -37,9 +43,9 @@ export default function FileDropZone({ onFileSelect, disabled, selectedFile, dra
 
   return (
     <div
-      className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer
-        ${disabled ? 'opacity-80 cursor-not-allowed' : ''}
-        ${dragActive ? 'border-custom_blue bg-custom_less_blue' : 'border-custom_gray bg-custom_white'}`}
+      className={`relative border-2 border-dashed rounded-lg p-6 text-center transition-colors
+        ${dragActive ? "border-custom_blue bg-custom_less_blue" : "border-custom_gray bg-custom_white"}
+        ${disabled ? "opacity-80 cursor-not-allowed" : "cursor-pointer"}`}
       onClick={triggerFileSelect}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -51,7 +57,7 @@ export default function FileDropZone({ onFileSelect, disabled, selectedFile, dra
         accept=".csv,.xlsx"
         disabled={disabled}
         className="hidden"
-        onChange={e => e.target.files && handleFiles(e.target.files)}
+        onChange={(e) => e.target.files && handleFiles(e.target.files)}
       />
       {!selectedFile && (
         <>

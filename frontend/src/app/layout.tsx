@@ -15,9 +15,7 @@ export default function RootLayout({
       <body className="relative min-h-screen w-full flex flex-col justify-center items-center gap-10 bg-gray-100 p-4">
         {children}
         <a
-          href="https://dummy-data-gen-1061052074258.europe-north2.run.app/generatestores?count=50000"
-          target="_blank"
-          rel="noopener noreferrer"
+          href="https://dummy-data-gen-1061052074258.europe-north2.run.app/generate-stores?count=50000"
           className="text-custom_blue underline w-[25rem] text-center"
         >
           Download test dataset file for testing purpose
