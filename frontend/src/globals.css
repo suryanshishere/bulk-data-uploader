@@ -2,6 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
+body {
+  @apply font-mono;
+}
+
+@keyframes pulse-gentle {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+.pulse-gentle {
+  animation: pulse-gentle 2s ease-in-out infinite;
+}
+
 .custom_go {
   @apply relative inline-block font-medium text-custom_black isolate;
   background-color: white;
