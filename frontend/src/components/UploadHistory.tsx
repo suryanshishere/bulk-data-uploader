@@ -39,7 +39,7 @@ export default function UploadHistory({
                     {h._id === currentProcessId ? "processing" : h.status}
                   </span>
                 </div>
-                <div className="w-full flex gap-1 justify-between">
+                <div className="w-full flex gap-1 justify-between flex-wrap">
                   <span>So far Processed:</span>
                   <Link
                     href={`/file/${h._id}`}

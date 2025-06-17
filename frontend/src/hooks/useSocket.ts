@@ -1,44 +1,20 @@
-import { useState, useEffect, useRef } from "react";
+// src/hooks/useSocket.ts
+
+import { useEffect, useRef } from "react";
 import { io, Socket } from "socket.io-client";
+import { Action, HistoryEntry, Summary } from "../lib/uploaderState";
 
-type Summary = {
-  total: number;
-  success: number;
-  failed: number;
-  errors: { row: number; message: string }[];
-};
-
-type HistoryEntry = {
-  _id: string;
-  status: string;
-  total: number;
-  processed: number;
-  success: number;
-  failed: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type UseSocketOptions = {
-  email: string;
-  onLog?: (msg: string) => void;
-  onHistory?: (history: HistoryEntry[]) => void;
-  onProgress?: (processId: string, percent: number) => void;
-  onSummary?: (summary: Summary & { processId: string }) => void;
-};
-
-export function useSocket({ email, onLog, onHistory, onProgress, onSummary }: UseSocketOptions) {
+export function useSocket(email: string, dispatch: React.Dispatch<Action>) {
   const socketRef = useRef<Socket | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
-    const BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL;
-    if (!BACKEND) {
-      onLog?.("❌ NEXT_PUBLIC_BACKEND_URL not defined");
+    const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL;
+    if (!BACKEND_URL) {
+      dispatch({ type: "ADD_LOG", payload: "❌ NEXT_PUBLIC_BACKEND_URL is not defined." });
       return;
     }
 
-    const socket = io(BACKEND, {
+    const socket = io(BACKEND_URL, {
       query: { email: email.trim() },
       transports: ["websocket", "polling"],
       path: "/socket.io",
@@ -46,44 +22,23 @@ export function useSocket({ email, onLog, onHistory, onProgress, onSummary }: Us
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      setIsConnected(true);
-      onLog?.(`✅ Socket connected (${socket.id})`);
+      dispatch({ type: "ADD_LOG", payload: `✅ Socket connected (${socket.id})` });
+      dispatch({ type: "SET_CONNECTED", payload: true });
     });
 
-    socket.on("history", (payload) => {
-      let entries: HistoryEntry[] = [];
-      if (Array.isArray(payload)) entries = payload;
-      else if (payload?.history) entries = payload.history;
-      else {
-        onLog?.("❌ Unexpected history format");
-        return;
-      }
-      onHistory?.(entries);
-    });
-
-    socket.on("progress", ({ processId, percent }) => {
-      onProgress?.(processId, percent);
-    });
-
-    socket.on("summary", (summary) => {
-      onSummary?.(summary);
-    });
-
-    socket.on("log", (msg: string) => {
-      onLog?.(`🔧 ${msg}`);
-    });
-
-    socket.on("disconnect", () => {
-      setIsConnected(false);
-      onLog?.("🔌 Socket disconnected");
-    });
-    socket.on("error", (err) => onLog?.(`❌ Socket error: ${err}`));
+    socket.on("history", (history: HistoryEntry[]) => dispatch({ type: "SET_HISTORY", payload: history }));
+    socket.on("fileProcessId", (pid: string) => dispatch({ type: "SET_CURRENT_PROCESS_ID", payload: pid }));
+    socket.on("progress", (data: { processId: string; percent: number }) => dispatch({ type: "UPDATE_PROCESS_PROGRESS", payload: data }));
+    socket.on("summary", (summary: Summary & { processId: string }) => dispatch({ type: "PROCESS_COMPLETE", payload: summary }));
+    socket.on("log", (msg: string) => dispatch({ type: "ADD_LOG", payload: `🔧 ${msg}` }));
+    socket.on("disconnect", () => dispatch({ type: "SET_CONNECTED", payload: false }));
+    socket.on("error", (e: Error) => dispatch({ type: "ADD_LOG", payload: `❌ Socket error: ${e.message}` }));
 
     return () => {
-      socketRef.current?.disconnect();
+      socket.disconnect();
       socketRef.current = null;
     };
-  }, [email, onLog, onHistory, onProgress, onSummary]);
+  }, [email, dispatch]);
 
-  return { socketRef, isConnected };
+  return socketRef;
 }
