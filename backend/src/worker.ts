@@ -31,16 +31,13 @@ const BATCH_SIZE = 1000;
 
   new Worker<{ path: string; userEmail: string }>(
     "storeQueue",
-    async (
-      job: Job<{ path: string; socketId?: string; userEmail?: string }>
-    ) => {
-      const { path, socketId = "", userEmail } = job.data;
+    async (job: Job<{ path: string; userEmail: string }>) => {
+      const { path, userEmail } = job.data;
 
       let tracker: IFileProcess;
       try {
         tracker = await FileProcess.create({
           userEmail,
-          socketId,
           filePath: path,
           status: "processing",
         });
@@ -49,7 +46,7 @@ const BATCH_SIZE = 1000;
         throw err;
       }
 
-      const room = userEmail || socketId;
+      const room = userEmail;
       emitter.to(room).emit("fileProcessId", tracker._id.toString());
       emitter
         .to(room)
@@ -58,20 +55,30 @@ const BATCH_SIZE = 1000;
       const emitHistory = async () => {
         if (!userEmail) return;
 
+        // Fetch all FileProcess docs for this user
         const history = await FileProcess.find({ userEmail })
-          .sort({ createdAt: -1 }) // sort by time (latest first)
+          .sort({ createdAt: -1 })
           .select(
             "_id status total processed success failed createdAt updatedAt"
           )
           .lean();
 
-        const currentProcessing = history.find(
-          (h) => h.status === "processing"
-        );
+        // Identify the “processing” one
+        const current = history.find((h) => h.status === "processing");
 
+        // If there is a current one, load its Store records
+        let currentStores: Array<Record<string, any>> = [];
+        if (current) {
+          currentStores = await Store.find({ fileProcess: current._id })
+            .select("_id status") // pick whatever Store fields you need
+            .lean();
+        }
+
+        // Emit everything in one payload
         emitter.to(room).emit("history", {
           list: history,
-          currentProcessingId: currentProcessing?._id.toString() || null,
+          currentProcessingId: current?._id.toString() || null,
+          currentStores, // an array of { _id, status, … }
         });
       };
 
@@ -185,7 +192,22 @@ const BATCH_SIZE = 1000;
             emitter.to(room).emit("log", "🎉 Done");
             await reportProgress(true);
             await summarize();
-            fs.unlinkSync(path);
+            try {
+              await fs.promises.unlink(path);
+              emitter.to(room).emit("log", "🗑️ File deleted after processing.");
+            } catch (deleteErr) {
+              emitter
+                .to(room)
+                .emit(
+                  "log",
+                  `⚠️ Error deleting file: ${
+                    typeof deleteErr === "object" && deleteErr && "message" in deleteErr
+                      ? (deleteErr as any).message
+                      : String(deleteErr)
+                  }`
+                );
+              console.error("Error deleting file:", deleteErr);
+            }
             resolve();
           })
           .on("error", reject);

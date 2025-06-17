@@ -8,15 +8,14 @@ interface ErrorDetail {
 
 export interface IFileProcess extends Document {
   userEmail: string;
-  socketId?: string;
   filePath: string;
   total: number;
   processed: number;
   success: number;
   failed: number;
-  processingErrors: ErrorDetail[]; // ✅ renamed here
+  processingErrors: ErrorDetail[];
   status: "pending" | "processing" | "completed" | "failed" | "stopped";
-  records?: Types.Array<any>;
+  record?: Types.Subdocument & Record<string, any>; // single Store document populated via `record`
   createdAt: Date;
   updatedAt: Date;
 }
@@ -29,7 +28,6 @@ const ErrorDetailSchema = new Schema<ErrorDetail>(
 const FileProcessSchema = new Schema<IFileProcess>(
   {
     userEmail: { type: String, required: true },
-    socketId: { type: String },
     filePath: { type: String, required: true },
     total: { type: Number, default: 0 },
     processed: { type: Number, default: 0 },
@@ -38,17 +36,23 @@ const FileProcessSchema = new Schema<IFileProcess>(
     processingErrors: { type: [ErrorDetailSchema], default: [] },
     status: {
       type: String,
-      enum: ["pending", "processing", "completed", "failed"],
+      enum: ["pending", "processing", "completed", "failed", "stopped"],
       default: "pending",
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toObject: { virtuals: true },
+    toJSON: { virtuals: true }
+  }
 );
 
-FileProcessSchema.virtual('records', {
-  ref: 'Store',
-  localField: '_id',
+// Virtual to populate the single Store document for this FileProcess
+FileProcessSchema.virtual('record', {
+  ref: 'Store',             // The model to use
+  localField: '_id',        // Find Store docs where `fileProcess` equals this _id
   foreignField: 'fileProcess',
+  justOne: true,            // Return a single document, not an array
 });
 
 export const FileProcess = model<IFileProcess>(

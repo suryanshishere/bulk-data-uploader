@@ -42,7 +42,7 @@ export default function UploadHistory({
                 <div className="w-full flex gap-1 justify-between flex-wrap">
                   <span>So far Processed:</span>
                   <Link
-                    href={`/file/${h._id}`}
+                    href={`/processed-file-data/${h._id}`}
                     className="cursor-pointer text-custom_blue"
                     target="_blank"
                     rel="noopener noreferrer"

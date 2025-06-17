@@ -27,12 +27,11 @@ type HistoryEntry = {
   processed: number;
   success: number;
   failed: number;
-  createdAt: string; // ISO string
+  createdAt: string;
   updatedAt: string;
 };
 
 type State = {
-  // email is provided once; we keep it in state for sending to backend
   email: string;
   history: HistoryEntry[];
   currentProcessId: string | null;
@@ -80,7 +79,7 @@ export default function FileUploader({ initialEmail }: FileUploaderProps) {
 
   const handleUpload = () => {
     if (socketRef.current && selectedFile && isValidFile(selectedFile)) {
-      uploadFile(selectedFile,state.email);
+      uploadFile(selectedFile, state.email);
     } else {
       dispatch({ type: "ADD_LOG", payload: "❌ Select a valid CSV/XLSX file to upload." });
     }
@@ -100,36 +99,56 @@ export default function FileUploader({ initialEmail }: FileUploaderProps) {
 
   return (
     <div className="w-full medium_mobile:w-[25rem] flex flex-col gap-8">
-      <div className="flex flex-col gap-4">
-        <FileDropZone
-          onFileSelect={(file) => dispatch({ type: "SET_SELECTED_FILE", payload: file })}
-          disabled={!isConnected || isUploading || isProcessing}
-          selectedFile={selectedFile}
-          dragActive={dragActive}
-          setDragActive={setDragActive}
-        />
-        <UploadButton
-          onClick={handleUpload}
-          disabled={!canUpload}
-          progress={isUploading ? uploadProgress : 0}
-          statusText={getStatusText()}
-        />
-      </div>
-
-      {isUploading && uploadProgress < 100 && (
-        <ProgressBar label="Uploading" progress={uploadProgress} />
-      )}
-      
-      {isProcessing && processProgress !== null && (
-        <ProgressBar label="Processing" progress={processProgress} />
+      {/* Loading UI while socket is connecting */}
+      {!isConnected && (
+        <div className="flex justify-center items-center h-48">
+          <div className="w-12 h-12 border-4 border-custom_gray border-t-transparent rounded-full animate-spin"></div>
+        </div>
       )}
 
-      <div className="font-mono mt-4">
-        <h4>Live Logs</h4>
-        <Logs lines={logs} />
-      </div>
+      {/* Main Uploader UI when connected */}
+      {isConnected && (
+        <>
+          <div className="flex flex-col gap-4">
+            <FileDropZone
+              onFileSelect={(file) => dispatch({ type: "SET_SELECTED_FILE", payload: file })}
+              disabled={!isConnected || isUploading || isProcessing}
+              selectedFile={selectedFile}
+              dragActive={dragActive}
+              setDragActive={setDragActive}
+            />
+            <UploadButton
+              onClick={handleUpload}
+              disabled={!canUpload}
+              progress={isUploading ? uploadProgress : 0}
+              statusText={getStatusText()}
+            />
+          </div>
 
-      <UploadHistory history={history} currentProcessId={currentProcessId} />
+          {/* Upload & Process Progress Bars */}
+          {isUploading && uploadProgress < 100 && (
+            <ProgressBar label="Uploading" progress={uploadProgress} />
+          )}
+          {isProcessing && processProgress !== null && (
+            <ProgressBar label="Processing" progress={processProgress} />
+          )}
+
+          {/* Live Logs */}
+          <div className="font-mono mt-4">
+            <h4>Live Logs</h4>
+            <Logs lines={logs} />
+          </div>
+
+          {/* History or loading placeholder */}
+          {history.length === 0 && !isUploading && !isProcessing ? (
+            <div className="flex justify-center items-center h-32 text-gray-500">
+              Loading history on availability...
+            </div>
+          ) : (
+            <UploadHistory history={history} currentProcessId={currentProcessId} />
+          )}
+        </>
+      )}
     </div>
   );
 }

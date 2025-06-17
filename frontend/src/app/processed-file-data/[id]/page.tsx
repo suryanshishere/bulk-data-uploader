@@ -52,7 +52,7 @@ export default function FileProcessPage() {
       setLoading(true);
       setError(null);
 
-      const url = new URL(`${base}/file/${id}`);
+      const url = new URL(`${base}/processed-file-data/${id}`);
       url.searchParams.set("skip", "0");
       url.searchParams.set("limit", String(LIMIT));
 
@@ -106,7 +106,7 @@ export default function FileProcessPage() {
       setLoadingMore(true);
       setError(null);
 
-      const url = new URL(`${base}/file/${id}`);
+      const url = new URL(`${base}/processed-file-data/${id}`);
       url.searchParams.set("skip", String(page * LIMIT));
       url.searchParams.set("limit", String(LIMIT));
 

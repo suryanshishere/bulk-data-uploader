@@ -53,13 +53,24 @@ export default function HomePage() {
           onClick={handleSubmit}
           disabled={!isValidEmail(email)}
           className={`mt-4 w-full h-10 font-semibold rounded custom_go ${
-            !isValidEmail(email)
-              ? "bg-gray-400 cursor-not-allowed"
-              : ""
+            !isValidEmail(email) ? "bg-gray-400 cursor-not-allowed" : ""
           }`}
         >
           Continue
         </button>
+      </div>
+      <div className="flex flex-col gap-4">
+        <a
+          href="https://dummy-data-gen-1061052074258.europe-north2.run.app/generate-stores?count=50000"
+          className="text-custom_blue underline w-[25rem] text-center"
+        >
+          Download test dataset file for testing purpose
+        </a>
+
+        <p className="text-xs w-full medium_mobile:w-[25rem] text-gray-500 font-mono text-center">
+          Render backend is slow. So, please be patience while processing a
+          backend request.
+        </p>
       </div>
     </>
   );
