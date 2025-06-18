@@ -1,7 +1,17 @@
 "use client";
 
+export const metadata: Metadata = {
+  title: "Processed file data",
+  description:
+    "Your file data that is processed so far or completed to share with people",
+  icons: {
+    icon: "/favicon.ico",
+  },
+};
+
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
+import { Metadata } from "next";
 
 interface ErrorDetail {
   row: number;
@@ -222,38 +232,38 @@ export default function FileProcessPage() {
         <table className="w-full border-collapse mt-4 text-sm">
           <thead>
             <tr>
-                {headers
+              {headers
                 .filter(
                   (key) =>
-                  key !== "status" &&
-                  key !== "error" &&
-                  key !== "_id" &&
-                  key !== "id"
+                    key !== "status" &&
+                    key !== "error" &&
+                    key !== "_id" &&
+                    key !== "id"
                 )
                 .map((key) => (
                   <th key={key} className="border p-2">
-                  {key}
+                    {key}
                   </th>
                 ))}
             </tr>
           </thead>
           <tbody>
             {records.map((rec) => (
-                <tr key={rec._id}>
+              <tr key={rec._id}>
                 {headers
                   .filter(
-                  (key) =>
-                    key !== "status" &&
-                    key !== "error" &&
-                    key !== "_id" &&
-                    key !== "id"
+                    (key) =>
+                      key !== "status" &&
+                      key !== "error" &&
+                      key !== "_id" &&
+                      key !== "id"
                   )
                   .map((key) => (
-                  <td key={key} className="border p-2">
-                    {rec.record[key] ?? "-"}
-                  </td>
+                    <td key={key} className="border p-2">
+                      {rec.record[key] ?? "-"}
+                    </td>
                   ))}
-                </tr>
+              </tr>
             ))}
           </tbody>
         </table>
