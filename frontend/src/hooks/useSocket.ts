@@ -22,6 +22,7 @@ export function useSocket(email: string, dispatch: React.Dispatch<Action>) {
       transports: ["websocket", "polling"],
       path: "/socket.io",
     });
+
     socketRef.current = socket;
 
     socket.on("connect", () => {
@@ -30,38 +31,49 @@ export function useSocket(email: string, dispatch: React.Dispatch<Action>) {
         payload: `✅ Socket connected (${socket.id})`,
       });
       dispatch({ type: "SET_CONNECTED", payload: true });
+
+      // Re-request history on reconnect
+      socket.emit("requestHistory", { email: email.trim() });
     });
 
-    socket.on(
-      "history",
-      (payload: {
-        list: HistoryEntry[];
-        currentProcessingId: string | null;
-      }) => {
-        dispatch({
-          type: "SET_HISTORY",
-          payload: {
-            history: payload.list,
-            currentProcessId: payload.currentProcessingId,
-          },
-        });
+    socket.on("history", (payload: {
+      list: HistoryEntry[];
+      currentProcessingId: string | null;
+    }) => {
+      dispatch({
+        type: "SET_HISTORY",
+        payload: {
+          history: payload.list,
+          currentProcessId: payload.currentProcessingId,
+        },
+      });
+
+      // Optionally join the current process room to get batch updates
+      if (payload.currentProcessingId) {
+        socket.emit("joinProcessRoom", { pid: payload.currentProcessingId });
       }
-    );
+    });
+
     socket.on("fileProcessId", (pid: string) =>
       dispatch({ type: "SET_CURRENT_PROCESS_ID", payload: pid })
     );
+
     socket.on("progress", (data: { processId: string; percent: number }) =>
       dispatch({ type: "UPDATE_PROCESS_PROGRESS", payload: data })
     );
+
     socket.on("summary", (summary: Summary & { processId: string }) =>
       dispatch({ type: "PROCESS_COMPLETE", payload: summary })
     );
-    socket.on("log", (msg: string) =>
-      dispatch({ type: "ADD_LOG", payload: `🔧 ${msg}` })
+
+    socket.on("log", (data: { message: string }) =>
+      dispatch({ type: "ADD_LOG", payload: `🔧 ${data.message}` })
     );
+
     socket.on("disconnect", () =>
       dispatch({ type: "SET_CONNECTED", payload: false })
     );
+
     socket.on("error", (e: Error) =>
       dispatch({ type: "ADD_LOG", payload: `❌ Socket error: ${e.message}` })
     );

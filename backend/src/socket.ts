@@ -1,3 +1,4 @@
+// src/socket.ts
 import { Server } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
 import { createClient } from "redis";
@@ -20,44 +21,47 @@ export const initSocket = async (server: any) => {
 
   io.on("connection", async (socket) => {
     const email = socket.handshake.query.email as string;
+
     if (email) {
-      socket.join(email);
+      socket.join(email); // Join user's email room
 
-      const history = await FileProcess.find({ userEmail: email }).sort({
-        createdAt: -1,
-      });
-      socket.emit("history", history);
-
-      const current = await FileProcess.findOne({
-        userEmail: email,
-        status: "processing",
-      });
-
-      if (current) {
-        socket.emit("fileProcessId", current._id.toString());
-        const percent = Math.round((current.processed / current.total) * 100);
-        socket.emit("progress", { processId: current._id.toString(), percent });
-      }
+      await sendHistoryAndCurrentProcess(email, socket);
     }
 
     socket.on("requestHistory", async ({ email }) => {
-      const history = await FileProcess.find({ userEmail: email }).sort({
-        createdAt: -1,
-      });
-      socket.emit("history", history);
+      await sendHistoryAndCurrentProcess(email, socket);
+    });
 
-      const current = await FileProcess.findOne({
-        userEmail: email,
-        status: "processing",
-      });
-
-      if (current) {
-        socket.emit("fileProcessId", current._id.toString());
-        const percent = Math.round((current.processed / current.total) * 100);
-        socket.emit("progress", { processId: current._id.toString(), percent });
-      }
+    socket.on("joinProcessRoom", ({ pid }) => {
+      socket.join(pid); // Join process ID room to receive batch updates
     });
   });
 };
+
+// Shared logic to emit history and progress
+async function sendHistoryAndCurrentProcess(email: string, socket: any) {
+  const history = await FileProcess.find({ userEmail: email }).sort({
+    createdAt: -1,
+  });
+
+  const current = await FileProcess.findOne({
+    userEmail: email,
+    status: "processing",
+  });
+
+  socket.emit("history", {
+    list: history,
+    currentProcessingId: current?._id.toString() ?? null,
+  });
+
+  if (current) {
+    const percent = Math.round((current.processed / current.total) * 100);
+    socket.emit("fileProcessId", current._id.toString());
+    socket.emit("progress", {
+      processId: current._id.toString(),
+      percent,
+    });
+  }
+}
 
 export const getIO = () => io;

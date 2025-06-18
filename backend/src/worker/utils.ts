@@ -69,11 +69,15 @@ export async function processCsvFile(
   let processed = 0;
   let errors: { row: number; message: string }[] = [];
 
-  const reportProgress = (final = false) =>
+  const reportProgress = (final = false) => {
+    const percent = final ? 100 : Math.round((processed / total) * 100);
     emitter.to(pid.toString()).emit("progress", {
       processId: pid.toString(),
-      percent: final ? 100 : Math.round((processed / total) * 100),
+      percent,
+      processed,
+      total,
     });
+  };
 
   const stream = fs.createReadStream(path).pipe(csv());
   let rowNum = 0;
@@ -82,54 +86,98 @@ export async function processCsvFile(
   for await (const row of stream) {
     rowNum++;
     buffer.push({ ...row, fileProcess: pid });
+
     if (buffer.length >= BATCH_SIZE) {
       const startRow = rowNum - buffer.length + 1;
+
       const stats = await processBatch(buffer.splice(0), startRow);
       processed += stats.inserted + stats.failed;
       errors.push(...stats.errors);
-      emitter
-        .to(pid.toString())
-        .emit(
-          "log",
-          `🔄 Batch @${startRow}: +${stats.inserted}, failed ${stats.failed}`
-        );
+
+      // Emit live log for this batch
+      emitter.to(pid.toString()).emit("log", {
+        processId: pid.toString(),
+        message: `🔄 Batch starting @${startRow} — ✅ Inserted: ${stats.inserted}, ❌ Failed: ${stats.failed}`,
+        processed,
+        failed: errors.length,
+      });
+
+      // Emit batch complete with detail
+      emitter.to(pid.toString()).emit("batch-complete", {
+        batchStart: startRow,
+        batchEnd: startRow + BATCH_SIZE - 1,
+        inserted: stats.inserted,
+        failed: stats.failed,
+        totalProcessed: processed,
+        totalFailed: errors.length,
+        totalSuccess: processed - errors.length,
+      });
+
+      // Update tracker in DB
       await updateTracker({
         processed,
         success: processed - errors.length,
         failed: errors.length,
       });
+
       reportProgress();
     }
   }
 
-  // Final flush
+  // Final flush for remaining buffer
   if (buffer.length) {
     const startRow = rowNum - buffer.length + 1;
+
     const stats = await processBatch(buffer, startRow);
     processed += stats.inserted + stats.failed;
     errors.push(...stats.errors);
+
+    emitter.to(pid.toString()).emit("log", {
+      processId: pid.toString(),
+      message: `🧹 Final Batch @${startRow} — ✅ Inserted: ${stats.inserted}, ❌ Failed: ${stats.failed}`,
+      processed,
+    });
+
+    emitter.to(pid.toString()).emit("batch-complete", {
+      batchStart: startRow,
+      batchEnd: rowNum,
+      inserted: stats.inserted,
+      failed: stats.failed,
+      totalProcessed: processed,
+      totalFailed: errors.length,
+      totalSuccess: processed - errors.length,
+    });
+
     await updateTracker({
       processed,
       success: processed - errors.length,
       failed: errors.length,
     });
+
     reportProgress(true);
   }
 
-  emitter.to(pid.toString()).emit("log", "🎉 Done processing");
-  await fs.promises.unlink(path);
-  emitter.to(pid.toString()).emit("log", "🗑️ File deleted");
+  emitter.to(pid.toString()).emit("log", {
+    processId: pid.toString(),
+    message: "🎉 File processing completed",
+  });
 
-  // Final summary
+  await fs.promises.unlink(path);
+  emitter.to(pid.toString()).emit("log", {
+    processId: pid.toString(),
+    message: "🗑️ Temporary file deleted",
+  });
+
   const summary = {
+    processId: pid.toString(),
     total,
     success: total - errors.length,
     failed: errors.length,
     errors,
   };
-  emitter
-    .to(pid.toString())
-    .emit("summary", { ...summary, processId: pid.toString() });
+
+  emitter.to(pid.toString()).emit("summary", summary);
+
   await updateTracker({
     processed: total,
     success: summary.success,

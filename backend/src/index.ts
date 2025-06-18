@@ -1,4 +1,4 @@
-import 'module-alias/register';
+import "module-alias/register";
 import express, { NextFunction, Request, Response } from "express";
 import http from "http";
 import multer from "multer";
@@ -12,6 +12,7 @@ import { initSocket } from "./socket";
 import { FileProcess } from "@models/FileProcess";
 import HttpError from "@utils/http-errors";
 import { enqueueFile } from "@worker/helpers";
+import { startWorker } from "./worker";
 
 // ensure uploads folder
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -135,4 +136,7 @@ app.use((error: HttpError, req: Request, res: Response, next: NextFunction) => {
 });
 
 const PORT = process.env.PORT || 4000;
-server.listen(PORT, () => console.log(`🚀 Server on port ${PORT}`));
+server.listen(PORT, async () => {
+  await startWorker();
+  console.log(`🚀 Server on port ${PORT}`);
+});
