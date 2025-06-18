@@ -180,16 +180,13 @@ export default function FileProcessPage() {
     records.length > 0 ? Object.keys(records[0].record || {}) : [];
 
   return (
-    <div className="w-[25rem] mt-28 mx-auto px-4">
+    <div className="w-full px-4">
       <h1 className="text-xl font-semibold mb-4">File Process Details</h1>
       <p>
         <strong>ID:</strong> {data._id}
       </p>
       <p>
         <strong>Email:</strong> {data.userEmail}
-      </p>
-      <p>
-        <strong>Path:</strong> {data.filePath}
       </p>
       <p>
         <strong>Status:</strong> {data.status}
@@ -225,28 +222,38 @@ export default function FileProcessPage() {
         <table className="w-full border-collapse mt-4 text-sm">
           <thead>
             <tr>
-              <th className="border p-2">ID</th>
-              <th className="border p-2">Status</th>
-              <th className="border p-2">Error</th>
-              {headers.map((key) => (
-                <th key={key} className="border p-2">
+                {headers
+                .filter(
+                  (key) =>
+                  key !== "status" &&
+                  key !== "error" &&
+                  key !== "_id" &&
+                  key !== "id"
+                )
+                .map((key) => (
+                  <th key={key} className="border p-2">
                   {key}
-                </th>
-              ))}
+                  </th>
+                ))}
             </tr>
           </thead>
           <tbody>
             {records.map((rec) => (
-              <tr key={rec._id}>
-                <td className="border p-2">{rec._id}</td>
-                <td className="border p-2">{rec.status || "-"}</td>
-                <td className="border p-2">{rec.error || "-"}</td>
-                {headers.map((key) => (
+                <tr key={rec._id}>
+                {headers
+                  .filter(
+                  (key) =>
+                    key !== "status" &&
+                    key !== "error" &&
+                    key !== "_id" &&
+                    key !== "id"
+                  )
+                  .map((key) => (
                   <td key={key} className="border p-2">
                     {rec.record[key] ?? "-"}
                   </td>
-                ))}
-              </tr>
+                  ))}
+                </tr>
             ))}
           </tbody>
         </table>
