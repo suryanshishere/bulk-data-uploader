@@ -91,11 +91,7 @@ export function uploaderReducer(state: State, action: Action): State {
       return {
         ...state,
         history: historyArray,
-        currentProcessId,
-        logs: addLog(
-          state.logs,
-          `📜 History updated (${historyArray.length} entries).`
-        ),
+        currentProcessId
       };
     }
 

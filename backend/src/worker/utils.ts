@@ -44,7 +44,7 @@ export async function sendEmailSummary(
     <h3>Upload Summary</h3>
     <p><a href="${
       process.env.FRONTEND_URL
-    }/file/${pid}" target="_blank">View Details</a></p>
+    }/processed-file-data/${pid}" target="_blank">View Details</a></p>
     <p>Total: ${summary.total}</p>
     <p>Success: ${summary.success}</p>
     <p>Failed: ${summary.failed}</p>

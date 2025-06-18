@@ -42,12 +42,13 @@ async function handleJob(
   emitter: Emitter,
   transporter: ReturnType<typeof initMailer>
 ) {
-  const { path, userEmail, fileProcessId } = job.data;
+  let { path, userEmail, fileProcessId } = job.data;
+  userEmail = decodeURIComponent(userEmail);
   const room = userEmail;
 
   // 1️⃣ Load the existing tracker doc:
   const tracker = await FileProcess.findById(fileProcessId)!;
-   if (!tracker) {
+  if (!tracker) {
     emitter.to(room).emit("error", `Tracker ${fileProcessId} not found`);
     throw new Error(`FileProcess ${fileProcessId} not found`);
   }
@@ -76,7 +77,9 @@ async function handleJob(
     path,
     tracker._id,
     emitter,
-    (fields) => updateTracker(tracker._id, fields),
+    async (fields) => {
+      await updateTracker(tracker._id, fields);
+    },
     total
   );
 
@@ -108,10 +111,9 @@ async function handleJob(
   const emitter = new Emitter(storeQueue.opts.connection as Redis);
   const transporter = initMailer();
 
- new Worker<{ path: string; userEmail: string; fileProcessId: string }>(
-  QUEUE_NAME,
-  (job) => handleJob(job, emitter, transporter),
-  { connection: storeQueue.opts.connection }
-);
-
+  new Worker<{ path: string; userEmail: string; fileProcessId: string }>(
+    QUEUE_NAME,
+    (job) => handleJob(job, emitter, transporter),
+    { connection: storeQueue.opts.connection }
+  );
 })();

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "tsx src/index.ts",
-    "worker": "tsx src/worker.ts",
+    "worker": "tsx src/worker/index.ts",
     "all": "concurrently \"npm run dev\" \"npm run worker\"",
     "build": "tsc",
     "start": "node dist/index.js"

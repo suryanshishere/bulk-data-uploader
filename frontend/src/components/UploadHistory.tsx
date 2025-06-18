@@ -34,7 +34,7 @@ export default function UploadHistory({
           {history.map((h, idx) => {
             const isCurrent = h._id === currentProcessId;
             const statusLabel = isCurrent
-              ? "Processing…"
+              ? "Processing"
               : h.status.charAt(0).toUpperCase() + h.status.slice(1);
 
             return (
@@ -52,7 +52,7 @@ export default function UploadHistory({
                           ? "text-custom_red"
                           : h.status === "completed"
                           ? "text-custom_green"
-                          : "text-custom_blue")
+                          : "text-custom_pale_orange")
                       }
                     >
                       {statusLabel}
@@ -60,11 +60,11 @@ export default function UploadHistory({
                   </div>
 
                   {/* Row 2: stats */}
-                  <div className="flex flex-wrap gap-4 text-sm text-gray-700">
-                    <span>Total: {h.total}</span>
-                    <span>Processed: {h.processed}</span>
-                    <span>Success: {h.success}</span>
-                    <span>Failed: {h.failed}</span>
+                  <div className="flex flex-wrap gap-2 justify-between text-sm text-gray-700">
+                    <span>Total:{h.total}</span>
+                    <span>Processed:{h.processed}</span>
+                    <span>Success:{h.success}</span>
+                    <span>Failed:{h.failed}</span>
                   </div>
 
                   {/* Row 3: link to details */}
