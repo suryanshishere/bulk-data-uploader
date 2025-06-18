@@ -35,12 +35,12 @@
     "typescript": "5.1.3"
   },
   "_moduleAliases": {
-    "@models": "src/models",
-    "@controllers": "src/controllers",
-    "@routes": "src/routes",
-    "@utils": "src/utils",
-    "@middlewares": "src/middlewares",
-    "@shared": "src/shared",
-    "@worker": "src/worker"
+    "@models": "dist/models",
+    "@controllers": "dist/controllers",
+    "@routes": "dist/routes",
+    "@utils": "dist/utils",
+    "@middlewares": "dist/middlewares",
+    "@shared": "dist/shared",
+    "@worker": "dist/worker"
   }
 }
