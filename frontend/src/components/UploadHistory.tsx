@@ -68,7 +68,7 @@ export default function UploadHistory({
                   </div>
 
                   {/* Row 3: link to details */}
-                  <div className="text-sm">
+                  {h.status !== "failed" && <div className="text-sm">
                     <Link
                       href={`/processed-file-data/${h._id}`}
                       target="_blank"
@@ -77,7 +77,7 @@ export default function UploadHistory({
                     >
                       View details: {h._id}
                     </Link>
-                  </div>
+                  </div>}
                 </li>
 
                 {/* Divider except after last */}

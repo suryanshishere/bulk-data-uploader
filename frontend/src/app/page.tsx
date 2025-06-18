@@ -65,7 +65,7 @@ export default function HomePage() {
         </a>
 
         <p>
-          Render backend is slow. So, please be patience while processing a
+          Render backend and redis cloud is slow. So, please be patience while processing a
           backend request.
         </p>
       </div>
