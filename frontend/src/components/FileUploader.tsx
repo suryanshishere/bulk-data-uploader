@@ -1,9 +1,7 @@
 // components/FileUploader.tsx
 "use client";
 
-import React, { useState, useEffect, useRef, useReducer } from "react";
-import { io, Socket } from "socket.io-client";
-import { useRouter } from "next/navigation";
+import React, { useState, useReducer } from "react";
 import FileDropZone from "./FileDropZone";
 import UploadButton from "./UploadButton";
 import ProgressBar from "./ProgressBar";

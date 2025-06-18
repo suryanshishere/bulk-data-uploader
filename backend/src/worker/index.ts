@@ -8,7 +8,7 @@ import { FileProcess, IFileProcess } from "@models/FileProcess";
 import { countRows, processCsvFile, sendEmailSummary } from "./utils";
 import { initDatabase, initMailer } from "./helpers";
 import { storeQueue } from "../queue";
-import { Redis } from "ioredis";
+import IORedis from "ioredis";
 
 const QUEUE_NAME = storeQueue.name;
 
@@ -109,7 +109,10 @@ async function handleJob(
 // --- Worker Entry Point ---
 (async () => {
   await initDatabase();
-  const emitter = new Emitter(storeQueue.opts.connection as Redis);
+  // ✅ Create a clean Redis connection for socket emitter
+  const emitterRedis = new IORedis(process.env.REDIS_URL!);
+  const emitter = new Emitter(emitterRedis);
+
   const transporter = initMailer();
 
   new Worker<{ path: string; userEmail: string; fileProcessId: string }>(
