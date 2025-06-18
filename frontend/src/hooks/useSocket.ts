@@ -36,26 +36,23 @@ export function useSocket(email: string, dispatch: React.Dispatch<Action>) {
       socket.emit("requestHistory", { email: email.trim() });
     });
 
-    socket.on(
-      "history",
-      (payload: {
-        list: HistoryEntry[];
-        currentProcessingId: string | null;
-      }) => {
-        dispatch({
-          type: "SET_HISTORY",
-          payload: {
-            history: payload.list,
-            currentProcessId: payload.currentProcessingId,
-          },
-        });
+    socket.on("history", (payload: {
+      list: HistoryEntry[];
+      currentProcessingId: string | null;
+    }) => {
+      dispatch({
+        type: "SET_HISTORY",
+        payload: {
+          history: payload.list,
+          currentProcessId: payload.currentProcessingId,
+        },
+      });
 
-        // Optionally join the current process room to get batch updates
-        if (payload.currentProcessingId) {
-          socket.emit("joinProcessRoom", { pid: payload.currentProcessingId });
-        }
+      // Optionally join the current process room to get batch updates
+      if (payload.currentProcessingId) {
+        socket.emit("joinProcessRoom", { pid: payload.currentProcessingId });
       }
-    );
+    });
 
     socket.on("fileProcessId", (pid: string) =>
       dispatch({ type: "SET_CURRENT_PROCESS_ID", payload: pid })
@@ -69,8 +66,8 @@ export function useSocket(email: string, dispatch: React.Dispatch<Action>) {
       dispatch({ type: "PROCESS_COMPLETE", payload: summary })
     );
 
-    socket.on("log", (message: string) =>
-      dispatch({ type: "ADD_LOG", payload: `🔧 ${message}` })
+    socket.on("log", (data: { message: string }) =>
+      dispatch({ type: "ADD_LOG", payload: `🔧 ${data.message}` })
     );
 
     socket.on("disconnect", () =>
