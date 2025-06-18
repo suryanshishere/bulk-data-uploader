@@ -11,6 +11,7 @@ import { storeQueue } from "./queue";
 import { initSocket } from "./socket";
 import { FileProcess } from "@models/FileProcess";
 import HttpError from "@utils/http-errors";
+import { enqueueFile } from "worker/helpers";
 
 // ensure uploads folder
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -25,7 +26,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-app.use("/processed-file-data/:id", async (req: Request, res: Response) => {console.log("reached")
+app.use("/processed-file-data/:id", async (req: Request, res: Response) => {
   const { id } = req.params;
   const skip = parseInt(req.query.skip as string) || 0;
   const limit = parseInt(req.query.limit as string) || 10;
@@ -59,7 +60,6 @@ app.use("/processed-file-data/:id", async (req: Request, res: Response) => {cons
       fileProcess: {
         _id: fileProcess._id,
         userEmail: fileProcess.userEmail,
-        filePath: fileProcess.filePath,
         total: fileProcess.total,
         processed: fileProcess.processed,
         success: fileProcess.success,
@@ -91,6 +91,7 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
 
   const absPath = path.resolve(req.file.path);
   const { email } = req.body as { email: string };
+
   if (!email) {
     res.status(400).json({ error: "Email is required" });
     return;
@@ -103,14 +104,17 @@ app.post("/api/upload", upload.single("file"), async (req, res) => {
   }
 
   try {
-    const job = await storeQueue.add("processStores", {
-      path: absPath,
-      userEmail: email,
+    // 1️⃣ First, save the FileProcess doc with status "queued"
+    const tracker = await enqueueFile(absPath, email);
+
+    res.json({
+      queued: true,
+      trackerId: tracker._id.toString(),
     });
-    res.json({ queued: true, jobId: job.id });
   } catch (err) {
     console.error("❌ Queue error:", err);
     res.status(500).json({ error: "Queue failed" });
+    return;
   }
 });
 

@@ -86,11 +86,11 @@ export default function FileUploader({ initialEmail }: FileUploaderProps) {
   };
 
   const isProcessing = !!currentProcessId;
-  const canUpload = isConnected && !isUploading && !isProcessing && isValidFile(selectedFile);
+  const canUpload = isConnected && !isUploading && isValidFile(selectedFile);
 
   const getStatusText = () => {
     if (isUploading) return `Uploading ${uploadProgress}%...`;
-    if (isProcessing) return "Processing in background...";
+    if (isProcessing) return "Upload another file";
     if (!isConnected) return "Connecting...";
     return "Upload File";
   };
@@ -112,7 +112,7 @@ export default function FileUploader({ initialEmail }: FileUploaderProps) {
           <div className="flex flex-col gap-4">
             <FileDropZone
               onFileSelect={(file) => dispatch({ type: "SET_SELECTED_FILE", payload: file })}
-              disabled={!isConnected || isUploading || isProcessing}
+              disabled={!isConnected || isUploading}
               selectedFile={selectedFile}
               dragActive={dragActive}
               setDragActive={setDragActive}

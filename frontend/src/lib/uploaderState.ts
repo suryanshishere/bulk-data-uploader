@@ -32,7 +32,7 @@ export type State = {
 
 export type Action =
   | { type: "SET_CONNECTED"; payload: boolean }
-  | { type: "SET_HISTORY"; payload: HistoryEntry[] }
+  | { type: "SET_HISTORY"; payload: { history: HistoryEntry[]; currentProcessId: string | null } }
   | { type: "SET_SELECTED_FILE"; payload: File | null }
   | { type: "START_UPLOAD" }
   | { type: "SET_UPLOAD_PROGRESS"; payload: number }
@@ -73,24 +73,25 @@ export function uploaderReducer(state: State, action: Action): State {
       return { ...state, isConnected: action.payload };
 
     case "SET_HISTORY": {
-      if (!Array.isArray(action.payload)) {
+      // Expect payload: { history: HistoryEntry[]; currentProcessId: string | null }
+      const { history: historyArray, currentProcessId } = action.payload as {
+        history: HistoryEntry[];
+        currentProcessId: string | null;
+      };
+
+      // Optional sanity check
+      if (!Array.isArray(historyArray)) {
         console.warn(
-          "SET_HISTORY called with non‑array payload:",
+          "SET_HISTORY called with non‑array history:",
           action.payload
         );
         return state;
       }
-      const historyArray = action.payload as HistoryEntry[];
-      const processingEntry = historyArray.find(
-        (h) => h.status === "processing"
-      );
 
       return {
         ...state,
         history: historyArray,
-        currentProcessId: processingEntry
-          ? processingEntry._id
-          : state.currentProcessId,
+        currentProcessId,
         logs: addLog(
           state.logs,
           `📜 History updated (${historyArray.length} entries).`

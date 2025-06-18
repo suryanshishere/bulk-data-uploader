@@ -12,10 +12,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="relative min-h-screen w-full flex flex-col justify-center items-center gap-20 bg-gray-100 p-4">
-        
+      <body className="relative my-10 min-h-screen w-full flex flex-col justify-center items-center gap-20 bg-gray-100 p-4">
         {children}
-       
       </body>
     </html>
   );

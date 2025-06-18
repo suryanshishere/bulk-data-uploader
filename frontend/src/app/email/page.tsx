@@ -36,15 +36,12 @@ export default function EmailPage({ searchParams }: EmailPageProps) {
       <div className="w-full medium_mobile:w-[25rem]">
         <FileUploader initialEmail={email} />
       </div>
-      <div className="flex flex-col gap-4">
-        <a
-          href="https://dummy-data-gen-1061052074258.europe-north2.run.app/generate-stores?count=50000"
-          className="text-custom_blue underline w-[25rem] text-center"
-        >
+      <div className="text-xs w-full medium_mobile:w-[25rem] text-gray-500 font-mono text-center">
+        <a className="text-custom_blue" href="https://dummy-data-gen-1061052074258.europe-north2.run.app/generate-stores?count=50000">
           Download test dataset file for testing purpose
         </a>
 
-        <p className="text-xs w-full medium_mobile:w-[25rem] text-gray-500 font-mono text-center">
+        <p>
           Render backend is slow. So, please be patience while processing a
           backend request.
         </p>
