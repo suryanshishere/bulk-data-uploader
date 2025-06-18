@@ -125,10 +125,6 @@ export default function FileUploader({ initialEmail }: FileUploaderProps) {
             />
           </div>
 
-          {/* Upload & Process Progress Bars */}
-          {isUploading && uploadProgress < 100 && (
-            <ProgressBar label="Uploading" progress={uploadProgress} />
-          )}
           {isProcessing && processProgress !== null && (
             <ProgressBar label="Processing" progress={processProgress} />
           )}
