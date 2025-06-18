@@ -4,6 +4,7 @@
 - **Frontend**: https://bulk-data-uploader-one.vercel.app
 - **Backend**: https://bulk-backend-su46.onrender.com
 - **Repository**: https://github.com/suryanshishere/bulk-data-uploader
+- **Video and screen share recording**: https://www.loom.com/share/9a4832677324438288cc95a8e73c5aba?sid=cdfa2b9e-23af-4761-afa1-7236f8f62fba
 
 ## Objective
 - Build a scalable system for uploading and processing large datasets
