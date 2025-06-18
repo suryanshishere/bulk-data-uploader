@@ -1,8 +1,9 @@
-import { Queue } from 'bullmq';
-import IORedis from 'ioredis';
+import { Queue } from "bullmq";
+import IORedis from "ioredis";
 
-const connection = new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', {
+const connection = new IORedis(process.env.REDIS_URL!, {
   maxRetriesPerRequest: null,
+  tls: {},
 });
 
-export const storeQueue = new Queue('storeQueue', { connection });
+export const storeQueue = new Queue("storeQueue", { connection });
