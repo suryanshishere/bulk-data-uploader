@@ -1,7 +1,7 @@
-import { connectDB } from "db";
+import { connectDB } from "../db";
 import nodemailer from "nodemailer";
 import { FileProcess } from "@models/FileProcess";
-import { storeQueue } from "queue";
+import { storeQueue } from "../queue";
 import { computeFileHash } from "@utils/fileHash";
 
 export async function initDatabase() {

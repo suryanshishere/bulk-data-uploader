@@ -29,11 +29,14 @@
       ],
       "@shared/*": [
         "shared/*"
+      ],
+      "@worker/*": [
+        "worker/*"
       ]
     }
   },
   "include": [
-    "**/*.ts"
+    "src"
   ],
   "exclude": [
     "node_modules"

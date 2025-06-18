@@ -1,12 +1,13 @@
+import "module-alias/register";
 import { Worker, Job } from "bullmq";
 import fs from "fs";
 import "dotenv/config";
 import { Emitter } from "@socket.io/redis-emitter";
 import { Store } from "@models/Store";
 import { FileProcess, IFileProcess } from "@models/FileProcess";
-import { countRows, processCsvFile, sendEmailSummary } from "worker/utils";
-import { initDatabase, initMailer } from "worker/helpers";
-import { storeQueue } from "queue";
+import { countRows, processCsvFile, sendEmailSummary } from "./utils";
+import { initDatabase, initMailer } from "./helpers";
+import { storeQueue } from "../queue";
 import { Redis } from "ioredis";
 
 const QUEUE_NAME = storeQueue.name;

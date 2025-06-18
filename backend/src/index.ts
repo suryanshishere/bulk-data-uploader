@@ -1,3 +1,4 @@
+import 'module-alias/register';
 import express, { NextFunction, Request, Response } from "express";
 import http from "http";
 import multer from "multer";
@@ -7,11 +8,10 @@ import fs from "fs";
 import "dotenv/config";
 import { Store } from "./models/Store";
 import { connectDB } from "./db";
-import { storeQueue } from "./queue";
 import { initSocket } from "./socket";
 import { FileProcess } from "@models/FileProcess";
 import HttpError from "@utils/http-errors";
-import { enqueueFile } from "worker/helpers";
+import { enqueueFile } from "@worker/helpers";
 
 // ensure uploads folder
 const uploadDir = path.join(process.cwd(), "uploads");

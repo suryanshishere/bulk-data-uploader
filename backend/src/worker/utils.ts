@@ -1,5 +1,3 @@
-import { FileProcess } from "@models/FileProcess";
-import { storeQueue } from "queue";
 import csv from "csv-parser";
 import { Store, IStore } from "@models/Store";
 import { initMailer } from "./helpers";
