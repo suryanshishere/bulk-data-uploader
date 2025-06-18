@@ -61,7 +61,7 @@ export default function HomePage() {
       </div>
       <div className="text-xs w-full medium_mobile:w-[25rem] text-gray-500 font-mono text-center">
         <a href="https://dummy-data-gen-1061052074258.europe-north2.run.app/generate-stores?count=50000" className="text-custom_blue">
-          Download test dataset file for testing purpose
+          Click here to Download test dataset file
         </a>
 
         <p>
