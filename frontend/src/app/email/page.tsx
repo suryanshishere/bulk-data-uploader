@@ -37,6 +37,10 @@ export default function EmailPage({ searchParams }: EmailPageProps) {
         <FileUploader initialEmail={email} />
       </div>
       <div className="text-xs w-full medium_mobile:w-[25rem] text-gray-500 font-mono text-center">
+        <p className="text-custom_blue mb-2">
+          Test email id: heresuryanshsingh@gmail.com
+        </p>
+
         <a
           className="text-custom_blue"
           href="https://dummy-data-gen-1061052074258.europe-north2.run.app/generate-stores?count=50000"
