@@ -86,11 +86,6 @@ async function handleJob(
     processingErrors: summary.errors,
   });
 
-  emitter.to(room).emit("summary", {
-    ...summary,
-    processId: tracker._id.toString(),
-  });
-
   await sendEmailSummary(
     transporter,
     userEmail,
